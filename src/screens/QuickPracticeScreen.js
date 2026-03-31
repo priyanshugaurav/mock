@@ -160,7 +160,10 @@ export default function QuickPracticeScreen({ navigation }) {
 
       {/* Floating Bottom Action */}
       <View style={styles.bottomAction}>
-        <TouchableOpacity activeOpacity={0.9} onPress={closeScreen}>
+        <TouchableOpacity activeOpacity={0.9} onPress={() => {
+          const topic = TOPICS.find(t => t.id === selectedTopic);
+          navigation.navigate('PracticeSession', { topicName: topic?.name || 'Practice' });
+        }}>
           <LinearGradient 
             colors={['#FF8A9F', '#D95C72']}
             start={{x: 0, y: 0}} end={{x: 1, y: 1}}

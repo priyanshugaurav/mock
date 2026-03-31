@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import HomeScreen from './src/screens/HomeScreen';
 import QuickPracticeScreen from './src/screens/QuickPracticeScreen';
+import PracticeSessionScreen from './src/screens/PracticeSessionScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -101,6 +102,11 @@ export default function App() {
           name="QuickPractice" 
           component={QuickPracticeScreen} 
           options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen 
+          name="PracticeSession" 
+          component={PracticeSessionScreen} 
+          options={{ animation: 'slide_from_bottom' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
