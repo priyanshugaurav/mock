@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,328 +8,269 @@ import {
   StatusBar,
   Dimensions,
   Platform,
+  Animated,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import MathView from '../components/MathView';
 
 const { width } = Dimensions.get('window');
 
-// ─── Gamified Minimalist Design Tokens ─────────────────────
-const BG = '#F3F4F6';         // Soft gray app background
-const SURFACE = '#FFFFFF';    // Pure white cards
-const TEXT_PRIMARY = '#1F2937';// Deep charcoal text
-const TEXT_MUTED = '#6B7280'; // Slate text for secondary details
-const PRIMARY_GREEN = '#10B981'; // Vibrant emerald green for correct
-const PRIMARY_DARK = '#111827';  // Very dark blue/black for hero
-const GOLD = '#F59E0B';       // Amber/Gold for XP & Tips
-const PINK = '#EC4899';       // Accent pink
-const BORDER = '#E5E7EB';     // Soft borders
+// ─── Design Tokens (Premium Minimal - Notebook Aesthetic) ─────────────
+const BG = '#FFFFFF';
+const TEXT_PRI = '#1A1C1E';
+const TEXT_SEC = '#42474E';
+const TEXT_MUTED = '#72777F';
+const GREEN = '#006D3A';
+const PINK = '#BA1A1A';
+const BORDER = '#DEE3EB';
+const PAPER_BG = '#FAFBFF';
+const HERO_IMG = 'https://i.pinimg.com/736x/3a/80/e8/3a80e89d21cf943848373568464f225d.jpg';
 
 export default function SolutionScreen({ route, navigation }) {
   const { item, index } = route.params;
   const insets = useSafeAreaInsets();
-  const letters = ['A', 'B', 'C', 'D'];
   const correctAnswer = item.options[item.correctIndex];
-  const steps = item.explanationSteps || [];
+
+  const latexSteps = [
+    { label: 'given', math: `\\text{Total Amount} = ₹45`, sub: 'Ratio = 2 : 3' },
+    { label: 'step 1', math: `2 + 3 = 5`, sub: 'Find total parts' },
+    { label: 'step 2', math: `\\frac{45}{5} = 9`, sub: 'Value of one part' },
+    { label: 'step 3', math: `3 \\times 9 = 27`, sub: 'Calculate share' }
+  ];
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true
+    }).start();
+  }, []);
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={BG} />
+      <StatusBar hidden />
 
-      {/* ─── MINIMAL NAVBAR ───────────────────────────────── */}
-      <View style={[styles.navbar, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
-        </TouchableOpacity>
-        <Text style={styles.navTitle}>Solution</Text>
-        <View style={styles.navBtn} /> {/* Spacer */}
-      </View>
-
+      {/* ─── SCROLLABLE CONTENT ───────────────────────────── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[
-          styles.scrollPad,
-          { paddingBottom: Math.max(insets.bottom, 20) + 40 },
-        ]}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 120 }}
         showsVerticalScrollIndicator={false}
+        pointerEvents="auto"
+        contentInsetAdjustmentBehavior="never"
       >
-        {/* ─── GAMIFIED HERO CARD ───────────────────────────── */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroHeader}>
-            <View style={styles.heroBadge}>
-              <Ionicons name="checkmark-circle" size={16} color={PRIMARY_GREEN} />
-              <Text style={styles.heroBadgeTxt}>Correct Answer</Text>
+        {/* ─── IMAGE HERO (NO OVERLAYS) ───────────────────── */}
+        <ImageBackground source={{ uri: HERO_IMG }} style={styles.heroImg} imageStyle={styles.heroImgStyle}>
+          {/* Subtle bottom fade to transition to white content */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.4)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0)', 'rgba(255,255,255,1)']}
+            style={[styles.heroOverlay, { paddingTop: Math.max(insets.top, 20) + 16 }]}
+          >
+            <View style={styles.navbar}>
+              <TouchableOpacity style={styles.navCircle} onPress={() => navigation.goBack()}>
+                <Ionicons name="chevron-back" size={24} color={TEXT_PRI} />
+              </TouchableOpacity>
+              <View style={styles.xpTag}>
+                <Ionicons name="flash" size={14} color="#FFB800" />
+                <Text style={styles.xpTxt}>+10 XP</Text>
+              </View>
             </View>
-            <View style={styles.heroXp}>
-              <Ionicons name="star" size={14} color={GOLD} />
-              <Text style={styles.heroXpTxt}>+10 XP</Text>
+
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroLabel}>CONCEPT SOLUTION</Text>
+              <Text style={styles.heroTitle}>The Larger Share</Text>
+              <View style={styles.heroBadgeRow}>
+                <View style={styles.correctBadge}>
+                  <Ionicons name="checkmark-done" size={16} color="#FFF" />
+                  <Text style={styles.correctTxt}>Answer: {correctAnswer}</Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </ImageBackground>
+
+        <Animated.View style={[styles.contentArea, { opacity: fadeAnim }]}>
+          <View style={styles.notebookSection}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIcon}>
+                <Ionicons name="help-circle-outline" size={20} color={TEXT_PRI} />
+              </View>
+              <Text style={styles.sectionTitle}>QUESTION {index + 1}</Text>
+            </View>
+
+            <View style={styles.paperSurface}>
+              <View style={styles.paperMargin} />
+              <View style={styles.paperContent}>
+                <Text style={styles.qText}>{item.question}</Text>
+              </View>
             </View>
           </View>
-          <Text style={styles.heroAnswerText}>{correctAnswer}</Text>
-        </View>
 
-        {/* ─── QUESTION BLOCK ───────────────────────────────── */}
-        <View style={styles.qBlock}>
-          <Text style={styles.qHeader}>
-            QUESTION {index + 1}
-          </Text>
-          <Text style={styles.qText}>{item.question}</Text>
-        </View>
+          <View style={styles.notebookSection}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIcon}>
+                <Ionicons name="create-outline" size={20} color={TEXT_PRI} />
+              </View>
+              <Text style={styles.sectionTitle}>DETAILED DERIVATION</Text>
+            </View>
 
-        {/* ─── MATH WORKING AREA ──────────────────────────── */}
-        <View style={styles.sectionWrap}>
-          <Text style={styles.sectionTitle}>SOLUTION WORKING</Text>
-          <View style={styles.mathWorkArea}>
-            {steps.map((step, idx) => {
-              const isLast = idx === steps.length - 1;
-              const isFinal = step.startsWith('∴') || step.startsWith('Final') || isLast;
+            <View style={styles.paperSurface}>
+              <View style={styles.paperMargin} />
+              <View style={styles.paperContent}>
+                {latexSteps.map((step, idx) => (
+                  <View key={idx} style={styles.derivationRow}>
+                    <View style={styles.mathWrapper}>
+                      <MathView 
+                        math={step.math} 
+                        fontSize={24}
+                        center={false} 
+                        style={{ marginLeft: -4 }} 
+                      />
+                      {step.sub && <Text style={styles.stepSub}>{step.sub}</Text>}
+                    </View>
+                    <View style={styles.labelWrapper}>
+                      <Text style={styles.stepLabelRight}>— {step.label}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                <View style={styles.resultRow}>
+                  <View style={styles.resultDivider} />
+                  <MathView
+                    math={`\\therefore \\text{Larger Share} = ₹${correctAnswer.replace('₹', '')}`}
+                    fontSize={26}
+                    color={GREEN}
+                    center={false}
+                    style={{ marginLeft: -4 }}
+                  />
+                  <View style={styles.resultCheck}>
+                    <View style={styles.resultCheckCircle}>
+                      <Ionicons name="checkmark" size={18} color="#FFF" />
+                    </View>
+                    <Text style={styles.verifiedTxt}>Final Answer Verified</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.optionSection}>
+            <Text style={styles.optionSectionTitle}>OPTION REVIEW</Text>
+            {item.options.map((opt, i) => {
+              const isCorrect = i === item.correctIndex;
               return (
-                <View key={idx} style={[styles.mathStepRow, isFinal && styles.mathStepRowFinal]}>
-                  {isFinal && <View style={styles.mathFinalAccent} />}
-                  <Text style={styles.mathStepNum}>{idx + 1}.</Text>
-                  <Text style={[styles.mathStepText, isFinal && styles.mathStepTextFinal]}>
-                     {step}
-                  </Text>
+                <View key={i} style={styles.miniOptRow}>
+                  <View style={[styles.miniOptCircle, isCorrect && styles.miniOptCircleCorrect]}>
+                    <Text style={[styles.miniOptChar, isCorrect && { color: '#FFF' }]}>{String.fromCharCode(65 + i)}</Text>
+                  </View>
+                  <Text style={[styles.miniOptTxt, isCorrect && styles.miniOptTxtCorrect]}>{opt}</Text>
+                  {isCorrect && <Ionicons name="checkmark-circle" size={16} color={GREEN} />}
                 </View>
               );
             })}
           </View>
-        </View>
-
-        {/* ─── EXPLANATION ──────────────────────────────────── */}
-        {item.explanation && (
-          <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>EXPLANATION</Text>
-            <View style={styles.explCard}>
-              <Text style={styles.explText}>{item.explanation}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* ─── SMART TIP ────────────────────────────────────── */}
-        {item.tip && (
-          <View style={styles.tipCard}>
-            <View style={styles.tipIconWrap}>
-              <Ionicons name="bulb" size={20} color={GOLD} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.tipTitle}>Pro Tip</Text>
-              <Text style={styles.tipText}>{item.tip}</Text>
-            </View>
-          </View>
-        )}
+        </Animated.View>
       </ScrollView>
+
+      {/* ─── STICKY PINK FOOTER ──────────────────────────── */}
+      <View
+        style={[styles.floatingFooter, { bottom: Math.max(insets.bottom, 16) + 10 }]}
+        pointerEvents="box-none"
+      >
+        <TouchableOpacity
+          style={styles.footerBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.footerBtnTxt}>Back to Practice</Text>
+          <Ionicons name="arrow-back-circle-outline" size={20} color="#FFF" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  navbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: BG,
-  },
-  navBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  navTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: TEXT_PRIMARY,
-    letterSpacing: -0.5,
-  },
-  scrollPad: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    gap: 32,
-  },
+  root: { flex: 1, backgroundColor: BG },
 
-  // Hero Card
-  heroCard: {
-    backgroundColor: PRIMARY_DARK,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: PRIMARY_DARK,
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
-  },
-  heroHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)', // Light green tint
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 6,
-  },
-  heroBadgeTxt: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: PRIMARY_GREEN,
-    textTransform: 'uppercase',
-  },
-  heroXp: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)', // Light gold tint
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 4,
-  },
-  heroXpTxt: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: GOLD,
-  },
-  heroAnswerText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: SURFACE,
-    lineHeight: 32,
-  },
+  // Hero
+  heroImg: { width: '100%', height: 280 },
+  heroImgStyle: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  heroOverlay: { flex: 1, paddingHorizontal: 20 },
+  navbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  navCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center' },
+  xpTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  xpTxt: { fontSize: 13, fontWeight: '700', color: TEXT_PRI },
+  heroInfo: { marginTop: 'auto', paddingBottom: 24 },
+  heroLabel: { fontSize: 11, fontWeight: '800', color: TEXT_PRI, letterSpacing: 1.5 },
+  heroTitle: { fontSize: 32, fontWeight: '900', color: TEXT_PRI, marginBottom: 12 },
+  heroBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  correctBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: GREEN, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25 },
+  correctTxt: { fontSize: 14, fontWeight: '700', color: '#FFF' },
 
-  // Question Block
-  qBlock: {
-    gap: 8,
-  },
-  qHeader: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: TEXT_MUTED,
-    letterSpacing: 1.5,
-  },
-  qText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: TEXT_PRIMARY,
-    lineHeight: 26,
-  },
+  // Content
+  contentArea: { paddingHorizontal: 20, paddingTop: 10, gap: 24, backgroundColor: BG },
+  qContainer: { position: 'relative', paddingLeft: 20 },
+  qIndicator: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 4, backgroundColor: PINK, borderRadius: 2 },
+  qTag: { fontSize: 12, fontWeight: '800', color: PINK, letterSpacing: 1, marginBottom: 8 },
+  qText: { fontSize: 18, fontWeight: '700', color: TEXT_PRI, lineHeight: 28 },
 
-  // Sections
-  sectionWrap: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: TEXT_MUTED,
-    letterSpacing: 1.5,
-  },
-
-  // Math Working Area
-  mathWorkArea: {
-    backgroundColor: PRIMARY_DARK,
-    borderRadius: 20,
-    paddingVertical: 16,
+  // Notebook Section
+  notebookSection: { gap: 16 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sectionIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F0F4F8', justifyContent: 'center', alignItems: 'center' },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: TEXT_PRI, letterSpacing: 1 },
+  paperSurface: {
+    backgroundColor: PAPER_BG,
+    borderRadius: 16,
+    minHeight: 200,
+    flexDirection: 'row',
     overflow: 'hidden',
-    shadowColor: PRIMARY_DARK,
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1,
+    borderColor: '#E1E4E8',
   },
-  mathStepRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: 'flex-start',
-    position: 'relative',
-  },
-  mathStepRowFinal: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)', // Subtle green tint
-  },
-  mathFinalAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: PRIMARY_GREEN,
-  },
-  mathStepNum: {
-    width: 28,
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#4B5563', // gray-600
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  mathStepText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#E2E8F0', // slate-200
-    lineHeight: 26,
-    fontWeight: '500',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  mathStepTextFinal: {
-    color: PRIMARY_GREEN,
-    fontWeight: '800',
-  },
+  paperMargin: { width: 1.5, backgroundColor: '#FFD1D9', marginLeft: 40 },
+  paperContent: { flex: 1, padding: 20 },
+  derivationRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 24, gap: 12 },
+  mathWrapper: { flex: 1 },
+  labelWrapper: { marginLeft: 10, minWidth: 60, marginTop: 10 },
+  stepLabelRight: { fontSize: 11, fontWeight: '700', color: TEXT_MUTED, textTransform: 'lowercase', opacity: 0.7 },
+  stepSub: { fontSize: 12, fontStyle: 'italic', color: TEXT_MUTED, marginTop: 4 },
 
-  // Explanation
-  explCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 20,
-    padding: 20,
-  },
-  explText: {
-    fontSize: 15,
-    color: TEXT_PRIMARY,
-    lineHeight: 24,
-    fontWeight: '500',
-  },
+  resultRow: { marginTop: 10 },
+  resultDivider: { height: 1, backgroundColor: '#E1E4E8', marginBottom: 16 },
+  resultCheck: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  resultCheckCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: GREEN, justifyContent: 'center', alignItems: 'center' },
+  verifiedTxt: { fontSize: 13, fontWeight: '700', color: GREEN },
 
-  // Smart Tip
-  tipCard: {
+  // Option review
+  optionSection: { gap: 12 },
+  optionSectionTitle: { fontSize: 11, fontWeight: '800', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 4 },
+  miniOptRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 10 },
+  miniOptCircle: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: BORDER, justifyContent: 'center', alignItems: 'center' },
+  miniOptCircleCorrect: { backgroundColor: GREEN, borderColor: GREEN },
+  miniOptChar: { fontSize: 14, fontWeight: '800', color: TEXT_MUTED },
+  miniOptTxt: { flex: 1, fontSize: 15, fontWeight: '600', color: TEXT_SEC },
+  miniOptTxtCorrect: { color: GREEN, fontWeight: '700' },
+
+  // Floating Footer
+  floatingFooter: { position: 'absolute', left: 20, right: 20, zIndex: 100 },
+  footerBtn: {
     flexDirection: 'row',
-    backgroundColor: '#FEF3C7', // light amber
-    borderRadius: 20,
-    padding: 20,
-    gap: 16,
-    alignItems: 'flex-start',
-  },
-  tipIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FDE68A', // darker amber
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: PINK,
+    paddingVertical: 18,
+    borderRadius: 20,
+    shadowColor: PINK,
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8
   },
-  tipTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#B45309', // deep amber
-    marginBottom: 4,
-  },
-  tipText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#92400E',
-    lineHeight: 22,
-  },
+  footerBtnTxt: { fontSize: 17, fontWeight: '800', color: '#FFF' }
 });

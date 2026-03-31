@@ -9,6 +9,9 @@ import { StatusBar } from 'expo-status-bar';
 import HomeScreen from './src/screens/HomeScreen';
 import QuickPracticeScreen from './src/screens/QuickPracticeScreen';
 import PracticeSessionScreen from './src/screens/PracticeSessionScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -87,29 +90,49 @@ function MainTabs() {
       <Tab.Screen name="Discover" component={DummyScreen} />
       <Tab.Screen name="Tests" component={DummyScreen} />
       <Tab.Screen name="Favorite" component={DummyScreen} />
-      <Tab.Screen name="Profile" component={DummyScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+  );
+}
+
+function RootNavigator() {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <View style={{ flex: 1, backgroundColor: '#F8F9FB' }} />;
+  }
+  
+  return (
+    <NavigationContainer>
+      <StatusBar hidden />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {user ? (
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen 
+              name="QuickPractice" 
+              component={QuickPracticeScreen} 
+              options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen 
+              name="PracticeSession" 
+              component={PracticeSessionScreen} 
+              options={{ animation: 'slide_from_bottom' }}
+            />
+          </>
+        ) : (
+          <Stack.Screen name="Login" component={LoginScreen} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="light" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen 
-          name="QuickPractice" 
-          component={QuickPracticeScreen} 
-          options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen 
-          name="PracticeSession" 
-          component={PracticeSessionScreen} 
-          options={{ animation: 'slide_from_bottom' }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
   );
 }
 
