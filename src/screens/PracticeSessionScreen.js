@@ -2,12 +2,14 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions,
   FlatList, StatusBar, Animated, PanResponder, ScrollView, Platform,
-  ImageBackground,
+  ImageBackground, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MathView from '../components/MathView';
+import { getNextQuestion, submitAnswer } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,46 +23,14 @@ const GRAY = '#72777F';
 const PAPER_BG = '#FAFBFF';
 const BORDER = '#DEE3EB';
 
-// ─── Questions ─────────────────────────────────────────────────
-const QUESTIONS = [
-  {
-    id: 1, question: 'Simplify the ratio 6 : 9',
-    options: ['1 : 2', '2 : 3', '3 : 4', '3 : 5'], correctIndex: 1,
-    latexSteps: [
-      { label: 'given', math: '\\text{Ratio} = 6 : 9' },
-      { label: 'step 1', math: '\\text{HCF}(6, 9) = 3', sub: 'Find HCF' },
-      { label: 'step 2', math: '\\frac{6}{3} : \\frac{9}{3}', sub: 'Divide by HCF' },
-      { label: 'result', math: '\\therefore \\text{Ratio} = 2 : 3' }
-    ]
-  },
-  {
-    id: 2, question: 'Divide ₹45 in the ratio 2 : 3. What is the larger share?',
-    options: ['₹15', '₹18', '₹27', '₹30'], correctIndex: 2,
-    latexSteps: [
-      { label: 'given', math: '\\text{Total} = ₹45, \\text{ Ratio} = 2 : 3' },
-      { label: 'step 1', math: '2 + 3 = 5', sub: 'Total parts' },
-      { label: 'step 2', math: '\\frac{45}{5} = 9', sub: 'One part value' },
-      { label: 'step 3', math: '3 \\times 9 = 27', sub: 'Calculate share' },
-      { label: 'result', math: '\\therefore \\text{Share} = ₹27' }
-    ]
-  },
-  {
-    id: 3, question: 'If boys to girls is 3:4 and there are 12 girls, how many boys are there?',
-    options: ['6', '8', '9', '16'], correctIndex: 2,
-    latexSteps: [
-      { label: 'given', math: '\\text{Ratio} = 3:4, \\text{ Girls} = 12' },
-      { label: 'step 1', math: '\\text{Let Boys} = 3x, \\text{ Girls} = 4x' },
-      { label: 'step 2', math: '4x = 12 \\implies x = 3', sub: 'Solve for x' },
-      { label: 'step 3', math: '3x = 3(3) = 9', sub: 'Calculate boys' },
-      { label: 'result', math: '\\therefore \\text{Boys} = 9' }
-    ]
-  }
-];
-
-const INFINITE_DATA = Array.from({ length: 200 }).map((_, i) => ({
-  ...QUESTIONS[i % QUESTIONS.length],
-  uniqueKey: String(i),
-}));
+// ─── Normalize API questions to match existing UI field names ──
+const normalizeQ = (q, idx) => ({
+  ...q,
+  question: q.question_text || q.question,
+  correctIndex: q.correct_index ?? q.correctIndex,
+  latexSteps: q.latex_steps || q.latexSteps || [],
+  uniqueKey: q.id || String(idx),
+});
 
 const formatTime = (s) => {
   const m = Math.floor(s / 60);
@@ -297,8 +267,11 @@ const InlineStepTimeline = ({ steps }) => {
 };
 
 // ─── Main ───────────────────────────────────────────────────────
-export default function PracticeSessionScreen({ navigation }) {
+export default function PracticeSessionScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const topicParam = route?.params?.topicName?.toLowerCase()?.replace(/ /g, '_') || 'ratio';
+
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempted, setTotalAttempted] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -310,6 +283,30 @@ export default function PracticeSessionScreen({ navigation }) {
   const [resultsList, setResultsList] = useState([]);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const scrollX = useRef(new Animated.Value(0)).current;
+
+  // ── Dynamic question list (fetched from API) ──
+  const [questions, setQuestions] = useState([]);
+  const [isLoadingQ, setIsLoadingQ] = useState(true);
+
+  // Fetch initial batch of questions
+  useEffect(() => {
+    fetchNextQuestion();
+  }, []);
+
+  const fetchNextQuestion = async () => {
+    try {
+      const userId = user?.id || 'anonymous';
+      const res = await getNextQuestion(userId, topicParam);
+      if (res?.question) {
+        const normalized = normalizeQ(res.question, questions.length);
+        setQuestions(prev => [...prev, normalized]);
+      }
+    } catch (err) {
+      console.warn('API unreachable, using fallback:', err.message);
+    } finally {
+      setIsLoadingQ(false);
+    }
+  };
 
   useEffect(() => {
     if (showResults) return;
@@ -334,15 +331,34 @@ export default function PracticeSessionScreen({ navigation }) {
     }
 
     setResultsList(prev => [...prev, { time: timeSpent, isCorrect }]);
-    setQuestionStartTime(Date.now()); // Reset for next
-  }, [questionStartTime, maxStreak]);
+    setQuestionStartTime(Date.now());
+
+    // Submit answer to backend (fire and forget)
+    const currentQ = questions[currentQIndex];
+    if (currentQ?.id && user?.id) {
+      submitAnswer(user.id, currentQ.id, isCorrect, timeSpent).catch(() => {});
+    }
+
+    // Pre-fetch next question
+    fetchNextQuestion();
+  }, [questionStartTime, maxStreak, currentQIndex, questions, user]);
 
   const wrongCount = totalAttempted - correctCount;
   const accuracy = totalAttempted === 0 ? 0 : Math.round((correctCount / totalAttempted) * 100);
   const timerText = formatTime(elapsed);
 
-  const currentItem = INFINITE_DATA[currentQIndex];
+  const currentItem = questions[currentQIndex] || null;
   const globalScrollRef = useRef(null);
+
+  // Show loading spinner while first question loads
+  if (isLoadingQ && questions.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
+        <ActivityIndicator size="large" color={PINK} />
+        <Text style={{ marginTop: 12, color: GRAY, fontWeight: '600' }}>Loading question...</Text>
+      </View>
+    );
+  }
 
   // ─── Results ──────────────────────────────────────────────────
   if (showResults) {
@@ -516,7 +532,7 @@ export default function PracticeSessionScreen({ navigation }) {
         <View style={styles.pageWrap}>
           {/* Reel */}
           <FlatList
-            data={INFINITE_DATA}
+            data={questions}
             keyExtractor={(item) => item.uniqueKey}
             onMomentumScrollEnd={(e) => {
               const newIdx = Math.round(e.nativeEvent.contentOffset.y / height);
