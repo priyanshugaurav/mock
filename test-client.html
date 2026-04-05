@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Lightning Mock Engine Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #F8FAFC; }
+        .latex-step { padding: 8px 12px; margin: 4px 0; background: #FFF; border-radius: 8px; border: 1px solid #E2E8F0; }
+        .latex-label { font-size: 0.75rem; color: #64748B; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 12px; min-width: 60px; display: inline-block; }
+    </style>
+</head>
+<body class="p-8 pb-20">
+
+    <div class="max-w-4xl mx-auto space-y-8">
+        
+        <!-- Header -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-black text-slate-800">⚡ Lightning Mock Engine</h1>
+                <p class="text-slate-500 text-sm mt-1">Procedural generation API testing client</p>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Generation Time</p>
+                    <p id="statsTimer" class="text-xl font-black text-emerald-500">0ms</p>
+                </div>
+                <button onclick="fetchQuestions()" class="bg-pink-500 hover:bg-pink-600 active:scale-95 transition-transform text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-pink-500/30">
+                    Generate New
+                </button>
+            </div>
+        </div>
+
+        <!-- Questions Container -->
+        <div id="questionsContainer" class="space-y-6">
+            <!-- Questions injected here -->
+        </div>
+
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3001/api/generate?topic=ratio&count=5';
+        let isFetching = false;
+
+        async function fetchQuestions() {
+            if (isFetching) return;
+            isFetching = true;
+            
+            const container = document.getElementById('questionsContainer');
+            const timer = document.getElementById('statsTimer');
+            
+            container.innerHTML = '<p class="text-center text-slate-400 font-medium py-10 animate-pulse">Generating at lightning speed...</p>';
+            timer.innerText = '--ms';
+
+            try {
+                // Let's actually measure end-to-end network time too
+                const networkStart = performance.now();
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                const networkEnd = performance.now();
+
+                timer.innerHTML = `${data.generationTimeMs}ms <span class="text-xs text-slate-400 font-normal ml-1">Server</span>`;
+                
+                if (data.success) {
+                    renderQuestions(data.questions);
+                } else {
+                    container.innerHTML = `<p class="text-red-500 font-bold text-center p-10">Error: ${data.error}</p>`;
+                }
+            } catch (err) {
+                container.innerHTML = `<p class="text-red-500 font-bold text-center p-10">Failed to fetch. Is the backend running on port 3001?</p>`;
+                console.error(err);
+            } finally {
+                isFetching = false;
+            }
+        }
+
+        function renderQuestions(questions) {
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+
+            questions.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden';
+                
+                // --- Options HTML ---
+                let optionsHtml = '<div class="grid grid-cols-2 gap-3 mt-4">';
+                q.options.forEach((opt, idx) => {
+                    const isCorrect = idx === q.correctIndex;
+                    optionsHtml += `
+                        <div class="py-2 px-4 rounded-xl border-2 ${isCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-100 bg-slate-50 text-slate-600'} font-semibold flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isCorrect ? 'bg-emerald-400 text-white' : 'bg-slate-200'}">${String.fromCharCode(65 + idx)}</span>
+                            ${opt}
+                        </div>
+                    `;
+                });
+                optionsHtml += '</div>';
+
+                // --- Steps HTML ---
+                let stepsHtml = '<div class="mt-6 border-t border-slate-100 pt-5"><h4 class="text-xs font-black text-slate-400 uppercase mb-3">LaTeX Derivation Steps</h4><div class="space-y-2">';
+                q.latexSteps.forEach(step => {
+                    // Using String.raw to protect the slashes temporarily
+                    const mathString = step.math.replace(/\\/g, '\\\\'); 
+                    stepsHtml += `
+                        <div class="latex-step flex items-start">
+                            <span class="latex-label pt-1">${step.label}</span>
+                            <div>
+                                <div class="math-content text-lg text-slate-800" data-latex="\\displaystyle ${mathString}"></div>
+                                ${step.sub ? `<p class="text-xs text-slate-400 italic mt-1">${step.sub}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                stepsHtml += '</div></div>';
+
+                // --- Assemble Card ---
+                card.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="bg-indigo-100 text-indigo-700 font-black text-xs px-2 py-1 rounded">Q${index + 1}</span>
+                            <span class="bg-slate-100 text-slate-500 font-bold text-xs px-2 py-1 rounded capitalize">${q.topic} - ${q.difficulty}</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800 leading-snug">${q.question}</h3>
+                        ${optionsHtml}
+                        ${stepsHtml}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            // Trigger KaTeX rendering
+            renderMathElements();
+        }
+
+        function renderMathElements() {
+            document.querySelectorAll('.math-content').forEach(el => {
+                const latex = el.getAttribute('data-latex');
+                katex.render(latex, el, {
+                    throwOnError: false,
+                    displayMode: false
+                });
+            });
+        }
+
+        // Auto-fetch on load
+        fetchQuestions();
+    </script>
+</body>
+</html>

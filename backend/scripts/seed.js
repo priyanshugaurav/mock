@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config();
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const { generateNvidiaCompletion } = require('../lib/nvidia');
 const { QUESTION_GENERATION_PROMPT } = require('../prompts/templates');
@@ -20,7 +20,8 @@ async function seedTopic(topic, subtopic, count = 5) {
     const prompt = QUESTION_GENERATION_PROMPT(topic, subtopic, targetElo);
 
     try {
-      const completion = await generateNvidiaCompletion([{ role: 'user', content: prompt }], "nvidia/llama-3.1-70b-instruct");
+      // Use meta/llama-3.1-70b-instruct for high quality math
+      const completion = await generateNvidiaCompletion([{ role: 'user', content: prompt }], "meta/llama-3.1-70b-instruct");
       const questionData = JSON.parse(completion);
 
       // Insert into Supabase
@@ -29,7 +30,7 @@ async function seedTopic(topic, subtopic, count = 5) {
         .insert({
           topic: topic,
           subtopic: subtopic,
-          question_text: questionData.question_text,
+          question: questionData.question_text || questionData.question,
           options: questionData.options,
           correct_index: questionData.correct_index,
           elo_rating: targetElo,

@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MathView from '../components/MathView';
-import { getNextQuestion, submitAnswer } from '../lib/api';
+import { getNextQuestion, submitAnswer, getQuestionBatch } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
@@ -29,7 +29,7 @@ const normalizeQ = (q, idx) => ({
   question: q.question_text || q.question,
   correctIndex: q.correct_index ?? q.correctIndex,
   latexSteps: q.latex_steps || q.latexSteps || [],
-  uniqueKey: q.id || String(idx),
+  uniqueKey: `${q.id || 'fallback'}-${idx}-${Math.random().toString(36).substring(2, 9)}`,
 });
 
 const formatTime = (s) => {
@@ -283,28 +283,52 @@ export default function PracticeSessionScreen({ navigation, route }) {
   const [resultsList, setResultsList] = useState([]);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const scrollX = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef(null);
 
   // ── Dynamic question list (fetched from API) ──
   const [questions, setQuestions] = useState([]);
   const [isLoadingQ, setIsLoadingQ] = useState(true);
 
-  // Fetch initial batch of questions
+  // Fetch initial batch of questions for smooth, reel-like offline feel
   useEffect(() => {
-    fetchNextQuestion();
+    fetchInitialBatch();
   }, []);
 
-  const fetchNextQuestion = async () => {
+  const fetchInitialBatch = async () => {
     try {
       const userId = user?.id || 'anonymous';
-      const res = await getNextQuestion(userId, topicParam);
+      const res = await getQuestionBatch(userId, topicParam, 5); // Preload 5 questions
+      if (res?.questions && res.questions.length > 0) {
+        setQuestions(prev => {
+          // Double check to prevent any UI duplication
+          const newQs = res.questions
+            .filter(q => !prev.some(pq => pq.id === q.id))
+            .map((q, idx) => normalizeQ(q, prev.length + idx));
+          return [...prev, ...newQs];
+        });
+      } else {
+        fetchNextQuestion();
+      }
+    } catch (err) {
+      console.warn('API batch unreachable, fallback to single:', err.message);
+      fetchNextQuestion();
+    } finally {
+      setIsLoadingQ(false);
+    }
+  };
+
+  const fetchNextQuestion = async (currentIds = []) => {
+    try {
+      const userId = user?.id || 'anonymous';
+      const res = await getNextQuestion(userId, topicParam, currentIds);
       if (res?.question) {
-        const normalized = normalizeQ(res.question, questions.length);
-        setQuestions(prev => [...prev, normalized]);
+        setQuestions(prev => {
+          if (prev.some(q => q.id === res.question.id)) return prev;
+          return [...prev, normalizeQ(res.question, prev.length)];
+        });
       }
     } catch (err) {
       console.warn('API unreachable, using fallback:', err.message);
-    } finally {
-      setIsLoadingQ(false);
     }
   };
 
@@ -339,9 +363,18 @@ export default function PracticeSessionScreen({ navigation, route }) {
       submitAnswer(user.id, currentQ.id, isCorrect, timeSpent).catch(() => {});
     }
 
-    // Pre-fetch next question
-    fetchNextQuestion();
-  }, [questionStartTime, maxStreak, currentQIndex, questions, user]);
+    // Pre-fetch next adaptive question
+    const currentIds = questions.map(q => q.id).filter(Boolean);
+    fetchNextQuestion(currentIds);
+
+    // Auto-scroll snappily to the next question after brief feedback delay
+    setTimeout(() => {
+      if (scrollRef.current) {
+        const nextIdx = currentQIndex + 1;
+        scrollRef.current.scrollToOffset({ offset: nextIdx * height, animated: true });
+      }
+    }, 700);
+  }, [questionStartTime, maxStreak, currentQIndex, questions, user, height]);
 
   const wrongCount = totalAttempted - correctCount;
   const accuracy = totalAttempted === 0 ? 0 : Math.round((correctCount / totalAttempted) * 100);
@@ -532,6 +565,7 @@ export default function PracticeSessionScreen({ navigation, route }) {
         <View style={styles.pageWrap}>
           {/* Reel */}
           <FlatList
+            ref={scrollRef}
             data={questions}
             keyExtractor={(item) => item.uniqueKey}
             onMomentumScrollEnd={(e) => {

@@ -7,7 +7,7 @@ const apiKey = process.env.NVIDIA_API_KEY;
 /**
  * Generates content using the specified NVIDIA model.
  */
-async function generateNvidiaCompletion(messages, model = "nvidia/nemotron-3-nano-30b-a3b") {
+async function generateNvidiaCompletion(messages, model = "meta/llama-3.1-70b-instruct") {
   const payload = {
     model: model,
     messages: messages,

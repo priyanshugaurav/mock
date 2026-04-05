@@ -3,7 +3,7 @@ CREATE TABLE public.questions (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     topic text NOT NULL,
     subtopic text,
-    question_text text NOT NULL,
+    question text NOT NULL,
     options jsonb NOT NULL,
     correct_index integer NOT NULL,
     elo_rating integer DEFAULT 1200,

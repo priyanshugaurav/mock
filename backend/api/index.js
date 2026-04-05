@@ -6,6 +6,7 @@ const { updateUserElo, updateQuestionElo, getTargetEloRange } = require('../lib/
 const { generateNvidiaCompletion } = require('../lib/nvidia');
 const { getFollowUpQuestions, getProgressionQuestion } = require('../lib/questionGraph');
 const { QUESTION_GENERATION_PROMPT } = require('../prompts/templates');
+const RatioTemplates = require('../lib/templates/RatioTemplates');
 
 const app = express();
 app.use(cors());
@@ -14,6 +15,11 @@ app.use(express.json());
 // ─── UTILS ─────────────────────────────────────────────────────────
 
 async function getUserProfile(userId) {
+  // Gracefully handle guest/anonymous users
+  if (!userId || userId === 'anonymous' || !/^[0-9a-fA-F-]{36}$/.test(userId)) {
+    return { id: 'anonymous', elo_rating: 1200 };
+  }
+
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('*')
@@ -21,13 +27,17 @@ async function getUserProfile(userId) {
     .single();
 
   if (error || !data) {
-    // Auto-create profile if missing
-    const { data: created } = await supabaseAdmin
-      .from('profiles')
-      .upsert({ id: userId, elo_rating: 1200 })
-      .select()
-      .single();
-    return created || { id: userId, elo_rating: 1200 };
+    try {
+      // Auto-create profile if missing (only for valid Auth UUIDs)
+      const { data: created } = await supabaseAdmin
+        .from('profiles')
+        .upsert({ id: userId, elo_rating: 1200 })
+        .select()
+        .single();
+      return created || { id: userId, elo_rating: 1200 };
+    } catch (err) {
+      return { id: userId, elo_rating: 1200 };
+    }
   }
   return data;
 }
@@ -50,6 +60,39 @@ app.get('/api/health', (req, res) => {
 });
 
 /**
+ * GET /api/generate
+ * LIGHTNING FAST MOCK ENGINE
+ * Procedurally generates questions on the fly without DB or AI dependencies.
+ */
+app.get('/api/generate', (req, res) => {
+  const { topic = 'ratio', count = 5 } = req.query;
+  const questions = [];
+  const start = performance.now();
+
+  try {
+    for (let i = 0; i < parseInt(count); i++) {
+      if (topic === 'ratio') {
+        questions.push(RatioTemplates.generate());
+      } else {
+        questions.push(RatioTemplates.generate()); // Fallback to ratio
+      }
+    }
+    const end = performance.now();
+    
+    // Add artificial delay logic if requested (for testing), otherwise blazing fast
+    res.json({
+      success: true,
+      count: questions.length,
+      generationTimeMs: Math.round(end - start),
+      questions
+    });
+  } catch (error) {
+    console.error('Procedural Generation Error:', error);
+    res.status(500).json({ error: 'Engine failed to generate questions' });
+  }
+});
+
+/**
  * GET /api/questions/next
  * 
  * Adaptive question selection:
@@ -58,11 +101,13 @@ app.get('/api/health', (req, res) => {
  * - If no history → serve from ELO range
  */
 app.get('/api/questions/next', async (req, res) => {
-  const { topic, userId } = req.query;
+  const { topic, userId, excludeIds } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'Missing userId' });
   }
+
+  const excludeList = excludeIds ? excludeIds.split(',') : [];
 
   try {
     const profile = await getUserProfile(userId);
@@ -85,7 +130,7 @@ app.get('/api/questions/next', async (req, res) => {
           .select('question_id')
           .eq('user_id', userId);
 
-        const answeredIds = new Set((history || []).map(h => h.question_id));
+        const answeredIds = new Set([...(history || []).map(h => h.question_id), ...excludeList]);
         const unseen = followUps.filter(q => !answeredIds.has(q.id));
 
         if (unseen.length > 0) {
@@ -140,7 +185,7 @@ app.get('/api/questions/next', async (req, res) => {
         .insert({
           topic: t,
           subtopic: 'General',
-          question_text: parsed.question_text,
+          question: parsed.question_text || parsed.question,
           options: parsed.options,
           correct_index: parsed.correct_index,
           elo_rating: userElo,
@@ -165,7 +210,7 @@ app.get('/api/questions/next', async (req, res) => {
       .select('question_id')
       .eq('user_id', userId);
 
-    const answeredIds = new Set((history || []).map(h => h.question_id));
+    const answeredIds = new Set([...(history || []).map(h => h.question_id), ...excludeList]);
     const unseen = questions.filter(q => !answeredIds.has(q.id));
 
     const pool = unseen.length > 0 ? unseen : questions;
@@ -275,18 +320,27 @@ app.post('/api/questions/answer', async (req, res) => {
  * Pre-fetch a batch of questions for offline/buffer use
  */
 app.get('/api/questions/batch', async (req, res) => {
-  const { topic, userId, count = 5 } = req.query;
+  const { topic, userId, count = 5, excludeIds } = req.query;
+  const excludeList = excludeIds ? excludeIds.split(',') : [];
 
   try {
     const profile = await getUserProfile(userId || 'anonymous');
     const range = getTargetEloRange(profile.elo_rating);
+
+    // Fetch history to avoid repeats
+    const { data: history } = await supabaseAdmin
+      .from('user_question_history')
+      .select('question_id')
+      .eq('user_id', userId || 'anonymous');
+
+    const answeredIds = new Set([...(history || []).map(h => h.question_id), ...excludeList]);
 
     let query = supabaseAdmin
       .from('questions')
       .select('*')
       .gte('elo_rating', range.min)
       .lte('elo_rating', range.max)
-      .limit(parseInt(count));
+      .limit(50); // Fetch a pool to shuffle
 
     if (topic && topic !== 'all') {
       query = query.eq('topic', topic);
@@ -295,7 +349,12 @@ app.get('/api/questions/batch', async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({ questions: data || [], userElo: profile.elo_rating });
+    // Filter unseen and shuffle
+    const unseen = (data || []).filter(q => !answeredIds.has(q.id));
+    const shuffled = unseen.sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, parseInt(count));
+
+    res.json({ questions: selected, userElo: profile.elo_rating });
 
   } catch (err) {
     res.status(500).json({ error: err.message });

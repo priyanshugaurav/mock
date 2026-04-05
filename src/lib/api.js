@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Replace with your Vercel deployment URL once deployed.
 // For local testing on Android Emulator, use 10.0.2.2:3001
-const BASE_URL = 'http://10.0.2.2:3001/api';
+const BASE_URL = 'https://backend-three-weld.vercel.app/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -14,17 +14,30 @@ const api = axios.create({
 
 /**
  * Fetch the next question based on user ELO and topic.
- * @param {string} userId 
- * @param {string} topic 
  */
-export const getNextQuestion = async (userId, topic = 'ratio') => {
+export const getNextQuestion = async (userId, topic = 'ratio', excludeIds = []) => {
   try {
     const response = await api.get('/questions/next', {
-      params: { userId, topic }
+      params: { userId, topic, excludeIds: excludeIds.join(',') }
     });
     return response.data;
   } catch (error) {
     console.error('API Error (getNextQuestion):', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Fetch a batch of questions for offline buffer feel.
+ */
+export const getQuestionBatch = async (userId, topic = 'ratio', count = 5, excludeIds = []) => {
+  try {
+    const response = await api.get('/questions/batch', {
+      params: { userId, topic, count, excludeIds: excludeIds.join(',') }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('API Error (getQuestionBatch):', error.message);
     throw error;
   }
 };
